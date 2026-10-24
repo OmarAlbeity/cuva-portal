@@ -68,7 +68,7 @@ const Scanner = (() => {
     }
     return new Promise((resolve, reject) => {
       const s = document.createElement('script');
-      s.src = 'vendor/jsQR.min.js';
+      s.src = 'vendor/jsQR.min.js?v=3.1.0';
       s.onload = () => {
         decodeJs = typeof window.jsQR === 'function' ? window.jsQR : window.jsQR && window.jsQR.default;
         decodeJs ? resolve() : reject(new Error('QR decoder failed to load'));

@@ -18,20 +18,9 @@
     Permissions-Policy = "geolocation=(), microphone=()"
     Content-Security-Policy = "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
 
-# HTML always fresh; scripts/styles cached for 1 hour
+# Pages, scripts and styles: always check for a newer version after each deploy
+# (Netlify answers with "not modified" when nothing changed, so this stays fast).
 [[headers]]
-  for = "/*.html"
+  for = "/*"
   [headers.values]
-    Cache-Control = "no-cache"
-[[headers]]
-  for = "/js/*"
-  [headers.values]
-    Cache-Control = "public, max-age=3600"
-[[headers]]
-  for = "/css/*"
-  [headers.values]
-    Cache-Control = "public, max-age=3600"
-[[headers]]
-  for = "/vendor/*"
-  [headers.values]
-    Cache-Control = "public, max-age=86400"
+    Cache-Control = "public, max-age=0, must-revalidate"

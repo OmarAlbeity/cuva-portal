@@ -364,6 +364,10 @@ const Page = (() => {
 
   /** Camera scanner. */
   function openScanner() {
+    if (typeof Scanner === 'undefined') {
+      UI.toast('The scanner did not load. Please refresh the page (pull down or press reload) and try again.', 'error');
+      return;
+    }
     const select = byId('door-event');
     const label = select.value ? select.options[select.selectedIndex].text : 'Any activity';
     let lastResult = null;
