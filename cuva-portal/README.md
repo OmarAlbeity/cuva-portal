@@ -25,6 +25,22 @@ Optional environment variables:
 | `SUPER_ADMIN_ID` | `202453080043` | Root Super Admin student ID |
 | `SESSION_SECRET` | auto-generated and stored in Blobs | Signing key for login cookies |
 
+## Door check-in with the phone camera
+Organizers open **Organizer → Door Check-in**:
+1. **Checking in for** — pick the activity at this door (the one happening now is preselected).
+   Passes for a different activity are refused and not checked in. Choose *Any activity* to accept all.
+2. Tap **Scan QR Pass**. The phone's back camera opens full-screen; allow camera access when asked.
+3. Point at a student's QR pass:
+   - **Green — VALID • Checked in** (beep, scanner moves to the next student automatically)
+   - **Amber — Already used** (shows when it was checked in)
+   - **Red — Wrong activity / INVALID pass** (not admitted)
+4. Close the scanner with ✕. The roster updates automatically.
+
+Notes:
+- Works in Safari (iPhone) and Chrome (Android). The ⚡ button turns on the flashlight where the phone supports it.
+- Inside **WeChat**, the camera may be blocked: tap ••• → *Open in Browser*.
+- "Camera not working? Type the token instead" lets you enter the code printed under the QR. A USB/Bluetooth QR scanner that types into that box also works.
+
 ## Try it on your computer first (optional)
 Needs Node.js 20+.
 ```bash
@@ -35,6 +51,7 @@ SUPER_ADMIN_PASSWORD=YourPassword123 npm run local
 $env:SUPER_ADMIN_PASSWORD="YourPassword123"; npm run local
 ```
 Open http://localhost:8888. Local data is saved in `.netlify/local-blobs` (separate from the live site).
+The camera scanner also works here, because browsers allow the camera on `localhost`.
 
 ## Project structure
 ```
@@ -51,9 +68,10 @@ public/                      The website
   signin.html / signup.html
   js/api.js                  Browser → API calls
   js/common.js               Shared UI, HTML escaping, campus-time helpers
+  js/scanner.js              Camera QR scanner for the door
   js/pages/*.js              One script per page
   css/tailwind.css           Pre-built styles (no CDN)
-  vendor/                    Local icons + QR library (no CDN)
+  vendor/                    Local icons, QR code generator, jsQR decoder (no CDN)
 tools/local-server.mjs       Local preview (npm run local)
 tools/build-icons.mjs, tailwind/   Only for design changes: npm run build
 ```

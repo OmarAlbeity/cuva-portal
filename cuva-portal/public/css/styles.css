@@ -132,3 +132,39 @@ body.modal-open {
   width: 160px;
   height: 160px;
 }
+
+/* ---------- Camera scanner ---------- */
+.scanner-top {
+  padding-top: calc(var(--safe-top) + 12px);
+}
+.scanner-bottom {
+  padding-bottom: calc(var(--safe-bottom) + 16px);
+}
+.scanner-frame {
+  width: min(70vw, 70vh, 300px);
+  height: min(70vw, 70vh, 300px);
+  border-radius: 28px;
+  border: 4px solid rgba(255, 255, 255, 0.92);
+  box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.45);
+  position: relative;
+}
+.scanner-frame::after {
+  content: '';
+  position: absolute;
+  left: 8%;
+  right: 8%;
+  height: 3px;
+  top: 10%;
+  background: #f43f5e;
+  border-radius: 3px;
+  box-shadow: 0 0 12px #f43f5e;
+  animation: scan-line 2s ease-in-out infinite alternate;
+}
+@keyframes scan-line {
+  from { top: 10%; }
+  to   { top: 88%; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .scanner-frame::after { animation: none; top: 50%; }
+}
+details > summary::-webkit-details-marker { display: none; }

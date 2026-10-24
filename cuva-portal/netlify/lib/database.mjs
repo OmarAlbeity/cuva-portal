@@ -33,6 +33,7 @@ export const GRADES = Object.freeze(['Bachelor', 'Master', 'PhD']);
 const SESSION_DAYS = 14;
 const MAX_FAILED_LOGINS = 10;
 const LOCK_MINUTES = 15;
+const SEAT_RECOUNT_IDLE_MS = 60_000;
 const DEFAULT_CATEGORIES = ['Board Games', 'Parliamentary Debate', 'Language & Culture', 'Workshops & Skills', 'Movie & Social'];
 
 const store = () => getStore({ name: 'cuva', consistency: 'strong' });
@@ -65,6 +66,10 @@ async function update(key, mutate, { retries = 15 } = {}) {
     const out = await mutate(current ? structuredClone(current.data) : null);
     if (!('write' in out)) return out.result;
 
+    if (current && !current.etag) {
+      // Never fall back to an unconditional write: that could silently overwrite someone else's change
+      throw new Error(`Storage returned no version tag for "${key}"; refusing an unsafe write.`);
+    }
     const condition = current ? { onlyIfMatch: current.etag } : { onlyIfNew: true };
     if (await conditionalSet(key, out.write, condition)) return out.result;
 
@@ -390,14 +395,34 @@ async function registrationsForEvent(eventId) {
   return (await mapLimit(keys, 25, getJSON)).filter(Boolean);
 }
 
-/** Moves the seat counter by +1 / -1. Returns 'OK' | 'FULL' | 'NOT_FOUND'. */
+/** Moves the seat counter by +1 / -1. Returns 'OK' | 'NOT_FOUND' | { result: 'FULL', idleMs }. */
 async function changeSeats(eventId, delta) {
   return update(`events/${eventId}`, ev => {
     if (!ev) return { result: 'NOT_FOUND' };
     const count = ev.registeredCount || 0;
-    if (delta > 0 && count >= ev.quota) return { result: 'FULL' };
-    return { write: { ...ev, registeredCount: Math.max(0, count + delta) }, result: 'OK' };
+    if (delta > 0 && count >= ev.quota) return { result: 'FULL', idleMs: Date.now() - Date.parse(ev.seatsUpdatedAt || ev.createdAt || 0) };
+    return { write: { ...ev, registeredCount: Math.max(0, count + delta), seatsUpdatedAt: nowISO() }, result: 'OK' };
   });
+}
+
+/**
+ * Self-healing seat counter: compares it with the registrations actually stored.
+ *   mode 'up'    → only raises the counter (safe while other sign-ups are in flight)
+ *   mode 'exact' → sets it to the real number
+ * Returns the real number of registrations.
+ */
+async function syncSeats(eventId, mode, knownCount = null) {
+  const real = knownCount ?? (await listKeys(`regs/${eventId}/`)).length;
+  try {
+    await update(`events/${eventId}`, ev => {
+      if (!ev) return { result: null };
+      const current = ev.registeredCount || 0;
+      const target = mode === 'up' ? Math.max(current, real) : real;
+      if (target === current) return { result: null };
+      return { write: { ...ev, registeredCount: target, seatsUpdatedAt: nowISO() }, result: null };
+    }, { retries: 5 });
+  } catch { /* best effort */ }
+  return real;
 }
 
 async function reserveToken(category, eventId, studentId) {
@@ -433,9 +458,17 @@ export async function registerForEvent(eventId, user) {
   if (now < ev.regOpenTime)  return fail('NOT_STARTED', 'Registration has not opened yet.');
   if (now > ev.regCloseTime) return fail('CLOSED', 'Registration Closed (Time Expired)');
 
-  const seat = await changeSeats(eventId, +1);
-  if (seat === 'NOT_FOUND') return fail('NOT_FOUND', 'Activity not found.');
-  if (seat === 'FULL') return fail('FULL', 'Activity Full (Limit Reached)');
+  let seat = await changeSeats(eventId, +1);
+  if (seat && seat.result === 'FULL' && seat.idleMs > SEAT_RECOUNT_IDLE_MS) {
+    // Counter says full but hasn't moved for a while: no sign-up can still be in progress,
+    // so it is safe to recount the saved registrations (fixes a counter left high by an
+    // interrupted request) and try once more.
+    const real = await syncSeats(eventId, 'exact');
+    if (real < ev.quota) seat = await changeSeats(eventId, +1);
+  }
+  const seatResult = typeof seat === 'string' ? seat : seat.result;
+  if (seatResult === 'NOT_FOUND') return fail('NOT_FOUND', 'Activity not found.');
+  if (seatResult === 'FULL') return fail('FULL', 'Activity Full (Limit Reached)');
 
   let token = null;
   try {
@@ -465,6 +498,7 @@ export async function registerForEvent(eventId, user) {
     // Second, independent quota guard: if more records exist than seats, the latest
     // registrations (by time, then id) withdraw themselves before anyone is told "OK".
     const keys = await listKeys(`regs/${eventId}/`);
+    if (keys.length <= ev.quota) await syncSeats(eventId, 'up', keys.length);
     if (keys.length > ev.quota) {
       const all = (await mapLimit(keys, 25, getJSON)).filter(Boolean)
         .sort((a, b) => a.registeredAt.localeCompare(b.registeredAt) || a.id - b.id);
@@ -528,15 +562,23 @@ export async function setRegistrationStatus(eventId, studentId, status) {
 }
 
 /**
- * Door check-in by token.
- * Returns { result: 'INVALID' } | { result: 'ALREADY' | 'OK', studentName, studentId, eventTitle, checkedInAt }
+ * Door check-in by token. If expectedEventId is given, a pass for any other
+ * activity is refused (WRONG_EVENT) and NOT checked in.
+ * Returns { result: 'INVALID' }
+ *       | { result: 'WRONG_EVENT' | 'ALREADY' | 'OK', studentName, studentId, eventTitle, checkedInAt? }
  */
-export async function checkInByToken(token) {
+export async function checkInByToken(token, expectedEventId = null) {
   const t = String(token).toUpperCase();
   const idx = await getJSON(`tokens/${t}`);
   if (!idx) return { result: 'INVALID' };
   const ev = await getEventRecord(idx.eventId);
   if (!ev) return { result: 'INVALID' };
+
+  if (expectedEventId && Number(idx.eventId) !== Number(expectedEventId)) {
+    const reg = await getJSON(`regs/${idx.eventId}/${idx.studentId}`);
+    if (!reg || reg.token !== t) return { result: 'INVALID' };
+    return { result: 'WRONG_EVENT', studentName: reg.student.name, studentId: reg.studentId, eventTitle: ev.title };
+  }
 
   return update(`regs/${idx.eventId}/${idx.studentId}`, reg => {
     if (!reg || reg.token !== t) return { result: { result: 'INVALID' } };

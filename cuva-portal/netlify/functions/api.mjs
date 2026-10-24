@@ -148,7 +148,8 @@ route('POST', '/api/admin/checkin', 'organizer', async ({ body }) => {
   if (!token || token.length > 64 || !/^[A-Z0-9-]+$/.test(token)) {
     return { result: 'INVALID' };
   }
-  return db.checkInByToken(token);
+  const eventId = body.eventId ? v.positiveId(body.eventId, 'activity') : null;
+  return db.checkInByToken(token, eventId);
 });
 
 // ---------- Super Admin ----------

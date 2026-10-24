@@ -77,7 +77,7 @@ const API = (() => {
     // organizer: roster & door
     roster: eventId => get(`api/admin/registrations${eventId ? `?eventId=${encodeURIComponent(eventId)}` : ''}`),
     setRegistrationStatus: (id, status, eventId, studentId) => patch(`api/admin/registrations/${encodeURIComponent(id)}`, { status, eventId, studentId }),
-    checkIn: token => post('api/admin/checkin', { token }),
+    checkIn: (token, eventId) => post('api/admin/checkin', eventId ? { token, eventId } : { token }),
 
     // super admin
     organizers:      () => get('api/admin/organizers'),

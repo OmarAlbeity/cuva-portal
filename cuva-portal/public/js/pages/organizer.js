@@ -169,6 +169,8 @@ const Page = (() => {
             </dl>
           </article>`).join('');
 
+    populateDoorEvents();
+
     // Roster filter dropdown
     const filter = byId('admin-event-filter');
     const current = filter.value;
@@ -270,58 +272,122 @@ const Page = (() => {
   // =================================================================
   // DOOR CHECK-IN
   // =================================================================
+  /** Activity chosen in "Checking in for" (null = any). */
+  function doorEventId() {
+    const v = byId('door-event').value;
+    return v ? Number(v) : null;
+  }
+
+  /** Fills "Checking in for", pre-selecting the activity happening now (or next). */
+  function populateDoorEvents() {
+    const select = byId('door-event');
+    const previous = select.value;
+    select.innerHTML = '<option value="">Any activity</option>' +
+      events.map(e => `<option value="${e.id}">${esc(e.title)} — ${esc(UI.fmtShort(e.startTime))} ${esc(UI.fmtTime(e.startTime))}</option>`).join('');
+
+    if (previous && events.some(e => String(e.id) === previous)) {
+      select.value = previous;
+      return;
+    }
+    const now = Date.now();
+    const HOUR = 3600e3;
+    const current = events.find(e => Date.parse(e.startTime) - 2 * HOUR <= now && now <= Date.parse(e.endTime) + HOUR);
+    const next = events
+      .filter(e => Date.parse(e.endTime) > now)
+      .sort((a, b) => Date.parse(a.startTime) - Date.parse(b.startTime))[0];
+    const pick = current || next;
+    select.value = pick ? String(pick.id) : '';
+  }
+
+  /** Turns a check-in result into the wording shown on the desk and in the scanner. */
+  function describeResult(result, token) {
+    switch (result.result) {
+      case 'OK':
+        return { tone: 'ok', title: 'VALID • Checked in', autoResume: true,
+                 detail: `${result.studentName} (${result.studentId}) — ${result.eventTitle}` };
+      case 'ALREADY':
+        return { tone: 'warn', title: 'Already used', autoResume: false,
+                 detail: `${result.studentName} (${result.studentId}) was checked in${result.checkedInAt ? ` at ${UI.fmtTime(result.checkedInAt)}` : ''} — ${result.eventTitle}` };
+      case 'WRONG_EVENT':
+        return { tone: 'error', title: 'Wrong activity — not admitted', autoResume: false,
+                 detail: `${result.studentName} (${result.studentId}) is registered for "${result.eventTitle}", not this one.` };
+      default:
+        return { tone: 'error', title: 'INVALID pass', autoResume: false,
+                 detail: `No registration matches ${token}.` };
+    }
+  }
+
+  /** Sends a token to the server; refreshes the roster after a successful check-in. */
+  async function checkToken(token) {
+    const result = await API.checkIn(token, doorEventId());
+    if (result.result === 'OK') changeRosterFilter();
+    return result;
+  }
+
+  function showDeskFeedback(result, token) {
+    const d = describeResult(result, token);
+    const styles = {
+      ok:    ['bg-emerald-50 border-emerald-200 text-emerald-900', 'circle-check-big', 'text-emerald-600'],
+      warn:  ['bg-amber-50 border-amber-200 text-amber-900', 'triangle-alert', 'text-amber-600'],
+      error: ['bg-rose-50 border-rose-200 text-rose-800', 'octagon-alert', 'text-rose-600']
+    }[d.tone];
+    const feedback = byId('scan-feedback');
+    feedback.classList.remove('hidden');
+    feedback.innerHTML = `
+      <div class="p-4 border rounded-2xl flex items-start gap-3 text-xs ${styles[0]}">
+        <i data-lucide="${styles[1]}" class="w-6 h-6 flex-shrink-0 ${styles[2]}"></i>
+        <div class="min-w-0">
+          <p class="font-black text-sm">${esc(d.title)}</p>
+          <p class="break-words">${esc(d.detail)}</p>
+        </div>
+      </div>`;
+    UI.icons();
+  }
+
+  /** Manual entry (typed token or a USB/Bluetooth scanner that types it). */
   async function verifyScan(button) {
     const input = byId('scan-token-input');
     const token = (input.value || '').trim().toUpperCase();
-    const feedback = byId('scan-feedback');
-
     if (!token) {
       UI.toast('Please enter or scan a pass token code.', 'error');
       return;
     }
-
-    let result;
     try {
-      result = await UI.busy(button, () => API.checkIn(token));
+      const result = await UI.busy(button, () => checkToken(token));
+      showDeskFeedback(result, token);
     } catch (err) {
       return fail(err);
     }
-
-    feedback.classList.remove('hidden');
-
-    if (result.result === 'INVALID') {
-      feedback.innerHTML = `
-        <div class="p-4 bg-rose-50 border border-rose-200 rounded-2xl flex items-start gap-3 text-rose-800 text-xs">
-          <i data-lucide="octagon-alert" class="w-5 h-5 text-rose-600 flex-shrink-0"></i>
-          <div class="min-w-0">
-            <p class="font-bold">Invalid Entry Pass</p>
-            <p class="break-all">No registration found matching token: <span class="font-mono font-bold">${esc(token)}</span>.</p>
-          </div>
-        </div>`;
-    } else if (result.result === 'ALREADY') {
-      feedback.innerHTML = `
-        <div class="p-4 bg-amber-50 border border-amber-200 rounded-2xl flex items-start gap-3 text-amber-900 text-xs">
-          <i data-lucide="triangle-alert" class="w-5 h-5 text-amber-600 flex-shrink-0"></i>
-          <div>
-            <p class="font-bold">Pass Already Used</p>
-            <p><strong>${esc(result.studentName)}</strong> (${esc(result.studentId)}) was already checked into <em>${esc(result.eventTitle)}</em>${result.checkedInAt ? ` at ${esc(UI.fmtTime(result.checkedInAt))}` : ''}.</p>
-          </div>
-        </div>`;
-    } else {
-      feedback.innerHTML = `
-        <div class="p-4 bg-emerald-50 border border-emerald-200 rounded-2xl flex items-start gap-3 text-emerald-900 text-xs">
-          <i data-lucide="circle-check-big" class="w-6 h-6 text-emerald-600 flex-shrink-0"></i>
-          <div>
-            <p class="font-bold text-sm">Valid Ticket • Check-in Successful!</p>
-            <p>Welcome, <strong>${esc(result.studentName)}</strong> (${esc(result.studentId)}) to <strong>${esc(result.eventTitle)}</strong>.</p>
-          </div>
-        </div>`;
-      changeRosterFilter();
-    }
-
     input.value = '';
     input.focus();
-    UI.icons();
+  }
+
+  /** Camera scanner. */
+  function openScanner() {
+    const select = byId('door-event');
+    const label = select.value ? select.options[select.selectedIndex].text : 'Any activity';
+    let lastResult = null;
+
+    Scanner.onClose(() => {
+      if (lastResult) showDeskFeedback(lastResult.result, lastResult.token);
+    });
+
+    Scanner.open({
+      subtitle: `For: ${label}`,
+      onToken: async token => {
+        try {
+          const result = await checkToken(token);
+          lastResult = { result, token };
+          return describeResult(result, token);
+        } catch (err) {
+          if (err && (err.status === 401 || err.status === 403)) {
+            Scanner.close();
+            fail(err);
+          }
+          throw err;
+        }
+      }
+    });
   }
 
   // =================================================================
@@ -563,7 +629,7 @@ const Page = (() => {
   return {
     init,
     grantOrganizer, revokeOrganizer,
-    changeRosterFilter, toggleAttendance, verifyScan, exportCSV,
+    changeRosterFilter, toggleAttendance, verifyScan, openScanner, exportCSV,
     openEditor, saveEvent, deleteEvent,
     addCategory, renameCategory, deleteCategory
   };
