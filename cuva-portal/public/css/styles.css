@@ -1,0 +1,170 @@
+/* =====================================================================
+ * CUVA Portal — Global styles
+ * Tailwind handles most utilities; this file holds the custom pieces
+ * and the phone-specific rules (safe areas, bottom nav, input zoom).
+ * ===================================================================== */
+
+:root {
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --bottom-nav-h: 64px;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+body {
+  -webkit-tap-highlight-color: transparent;
+  min-height: 100vh;
+  min-height: 100dvh;
+}
+
+/* Lock page scroll while a modal is open */
+body.modal-open {
+  overflow: hidden;
+}
+
+/* ---------- Phone: room for the fixed bottom tab bar ---------- */
+@media (max-width: 767px) {
+  body.has-bottom-nav {
+    padding-bottom: calc(var(--bottom-nav-h) + var(--safe-bottom));
+  }
+}
+
+.safe-top {
+  padding-top: var(--safe-top);
+}
+
+.bottom-nav {
+  height: calc(var(--bottom-nav-h) + var(--safe-bottom));
+  padding-bottom: var(--safe-bottom);
+}
+
+/* Bottom-sheet modals clear the iPhone home indicator */
+.sheet-safe {
+  padding-bottom: max(1.5rem, calc(1rem + var(--safe-bottom))) !important;
+}
+
+/* ---------- Phone: stop iOS Safari zooming into form fields (needs >=16px) ---------- */
+@media (max-width: 639px) {
+  input,
+  select,
+  textarea {
+    font-size: 16px !important;
+  }
+}
+
+/* ---------- Scrollbars ---------- */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: #f1f5f9; }
+::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 9999px; }
+::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+
+/* Horizontal pill rows: swipeable, no visible bar */
+.no-scrollbar {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+/* ---------- Modal entrance ---------- */
+.modal-panel {
+  animation: modal-in 0.18s ease-out;
+}
+@media (max-width: 639px) {
+  .modal-panel {
+    animation-name: sheet-up;
+  }
+}
+@keyframes modal-in {
+  from { opacity: 0; transform: scale(0.97); }
+  to   { opacity: 1; transform: none; }
+}
+@keyframes sheet-up {
+  from { opacity: 0; transform: translateY(32px); }
+  to   { opacity: 1; transform: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .modal-panel { animation: none; }
+}
+
+/* ---------- Toast stack: above the bottom nav on phones ---------- */
+.toast-stack {
+  position: fixed;
+  z-index: 60;
+  left: 1rem;
+  right: 1rem;
+  bottom: calc(var(--bottom-nav-h) + var(--safe-bottom) + 12px);
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  pointer-events: none;
+}
+@media (min-width: 768px) {
+  .toast-stack {
+    left: auto;
+    right: 1.25rem;
+    bottom: 1.25rem;
+    max-width: 24rem;
+  }
+}
+
+/* ---------- Brand pieces ---------- */
+.ticket-dashed-border {
+  height: 2px;
+  background-image: linear-gradient(to right, #e2e8f0 50%, rgba(255, 255, 255, 0) 0%);
+  background-position: bottom;
+  background-size: 14px 2px;
+  background-repeat: repeat-x;
+}
+
+.cuva-gradient-bg {
+  background: linear-gradient(135deg, #1e1b2e 0%, #2a0815 50%, #1a162b 100%);
+}
+
+/* QR code: fixed size whichever element qrcodejs renders */
+#pass-qrcode img,
+#pass-qrcode canvas {
+  width: 160px;
+  height: 160px;
+}
+
+/* ---------- Camera scanner ---------- */
+.scanner-top {
+  padding-top: calc(var(--safe-top) + 12px);
+}
+.scanner-bottom {
+  padding-bottom: calc(var(--safe-bottom) + 16px);
+}
+.scanner-frame {
+  width: min(70vw, 70vh, 300px);
+  height: min(70vw, 70vh, 300px);
+  border-radius: 28px;
+  border: 4px solid rgba(255, 255, 255, 0.92);
+  box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.45);
+  position: relative;
+}
+.scanner-frame::after {
+  content: '';
+  position: absolute;
+  left: 8%;
+  right: 8%;
+  height: 3px;
+  top: 10%;
+  background: #f43f5e;
+  border-radius: 3px;
+  box-shadow: 0 0 12px #f43f5e;
+  animation: scan-line 2s ease-in-out infinite alternate;
+}
+@keyframes scan-line {
+  from { top: 10%; }
+  to   { top: 88%; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .scanner-frame::after { animation: none; top: 50%; }
+}
+details > summary::-webkit-details-marker { display: none; }
