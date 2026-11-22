@@ -1,0 +1,24 @@
+{
+  "name": "cuva-portal",
+  "version": "3.0.0",
+  "description": "CUVA (NUIST) student activity registration and door check-in portal — Netlify edition",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "local": "node tools/local-server.mjs",
+    "build": "npm run build:css && npm run build:icons",
+    "build:css": "tailwindcss -c tailwind/tailwind.config.cjs -i tailwind/input.css -o public/css/tailwind.css --minify",
+    "build:icons": "node tools/build-icons.mjs"
+  },
+  "dependencies": {
+    "@netlify/blobs": "^11.1.6",
+    "nodemailer": "^7.0.13"
+  },
+  "devDependencies": {
+    "lucide": "^1.61.0",
+    "tailwindcss": "^3.4.19"
+  }
+}
