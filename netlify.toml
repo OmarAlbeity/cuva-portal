@@ -1,0 +1,26 @@
+# Netlify configuration for the CUVA Portal
+[build]
+  publish = "public"
+  functions = "netlify/functions"
+  # Pages and CSS are pre-built; no build step needed.
+  command = ""
+
+[functions]
+  node_bundler = "esbuild"
+
+# Security headers for every page
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Content-Type-Options = "nosniff"
+    X-Frame-Options = "DENY"
+    Referrer-Policy = "same-origin"
+    Permissions-Policy = "geolocation=(), microphone=()"
+    Content-Security-Policy = "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
+
+# Pages, scripts and styles: always check for a newer version after each deploy
+# (Netlify answers with "not modified" when nothing changed, so this stays fast).
+[[headers]]
+  for = "/*"
+  [headers.values]
+    Cache-Control = "public, max-age=0, must-revalidate"
